@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec.bak
+pip_install.log
+# large build artifacts / caches (never committed)
+*.mbtiles
+*.osm.pbf
+*.pbf
+planetiler.jar
+data/build/
+engine/__pycache__/
+*.dat
