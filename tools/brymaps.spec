@@ -32,5 +32,5 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='BryMaps',
-          console=False, icon=os.path.join(ROOT, 'data', 'icon.png'))
+          console=False, icon=os.path.join(ROOT, 'data', 'icon.ico'))
 coll = COLLECT(exe, a.binaries, a.datas, name='BryMaps')
