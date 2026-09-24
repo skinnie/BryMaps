@@ -14,16 +14,21 @@ from PySide6.QtCore import QUrl
 
 from backend import Backend
 
-QML = Path(__file__).resolve().parent / "qml"
+if getattr(sys, "frozen", False):
+    _BASE = Path(sys._MEIPASS)
+    QML = _BASE / "qml"
+    ICON = _BASE / "data" / "icon.png"
+else:
+    QML = Path(__file__).resolve().parent / "qml"
+    ICON = QML.parent.parent / "data" / "icon.png"
 
 
 def main():
     app = QGuiApplication(sys.argv)
     app.setApplicationName("BryMaps")
     app.setOrganizationName("BryMaps")
-    icon = QML.parent.parent / "data" / "icon.png"
-    if icon.exists():
-        app.setWindowIcon(QIcon(str(icon)))
+    if ICON.exists():
+        app.setWindowIcon(QIcon(str(ICON)))
 
     engine = QQmlApplicationEngine()
     engine.addImportPath(str(QML))

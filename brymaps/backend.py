@@ -16,7 +16,15 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, Slot, Property
 
-ENGINE = Path(__file__).resolve().parent.parent / "engine"
+def _res_base() -> Path:
+    # bundled (PyInstaller) resources live under sys._MEIPASS; source layout is repo root
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parent.parent
+
+
+ENGINE = _res_base() / "engine"
+DATA = _res_base() / "data"
 sys.path.insert(0, str(ENGINE))
 import bryton_build  # noqa: E402
 
@@ -174,7 +182,7 @@ class Backend(QObject):
     def _sizes(self):
         if getattr(self, "_size_map", None) is None:
             self._size_map = {}
-            f = Path(__file__).resolve().parent.parent / "data" / "geofabrik-sizes.json"
+            f = DATA / "geofabrik-sizes.json"
             try:
                 self._size_map = json.loads(f.read_text())
             except Exception:
@@ -206,7 +214,7 @@ class Backend(QObject):
         return regions
 
     def _load_regions(self):
-        bundled = Path(__file__).resolve().parent.parent / "data" / "geofabrik-index.json"
+        bundled = DATA / "geofabrik-index.json"
         cache = app_cache() / "geofabrik-index.json"
 
         # 1) show the full list immediately from whatever we already have (bundled or cache)
