@@ -285,12 +285,17 @@ class Backend(QObject):
                 urllib.request.urlretrieve(region["pbf"], pbf)
             mbtiles = work / f"{name}.mbtiles"
             jar = self._planetiler_jar()
+            # shared base-data dir so the ~1 GB of Planetiler sources (water polygons,
+            # natural earth, lake centerlines) download ONCE and are reused across builds
+            shared = app_cache() / "planetiler"
+            (shared / "data").mkdir(parents=True, exist_ok=True)
             cmd = [find_java(), "-Xmx4g", "-jar", str(jar),
                    f"--osm-path={pbf}", f"--output={mbtiles}", "--download", "--force"]
             if bounds:
                 cmd.append("--bounds={},{},{},{}".format(*bounds))
-            self._log("Generating vector tiles with Planetiler ...")
-            self._run(cmd, cwd=work)
+            self._log("Generating vector tiles with Planetiler "
+                      "(first run downloads ~1 GB of base data) ...")
+            self._run(cmd, cwd=shared)
             self._log("Packing Bryton .dat ...")
             b = bounds or region["bbox"]
             path = bryton_build.build(str(mbtiles), dest, name, code or "CXX",

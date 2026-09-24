@@ -44,9 +44,12 @@ ApplicationWindow {
         outDirDialog.open(); return ""
     }
 
+    // search text mirrored as a property so the computed model binding tracks it
+    property string searchText: ""
+
     Connections {
         target: Backend
-        function onRegionsLoaded(list) { win.allRegions = list; win.refreshList() }
+        function onRegionsLoaded(list) { win.allRegions = list }
         function onLogLine(s) { logArea.text += s + "\n"; logArea.cursorPosition = logArea.length }
         function onProgress(v) { progress.indeterminate = (v < 0); if (v >= 0) progress.value = v }
         function onBuildFinished(ok, msg) {
@@ -56,35 +59,36 @@ ApplicationWindow {
         }
     }
 
-    // build the visible model: search overrides the tree
-    function refreshList() {
-        var q = searchField.text.toLowerCase()
+    // Declarative model: recomputed automatically whenever allRegions, currentParent or
+    // searchText change. No imperative model assignment, so no timing race can blank it.
+    readonly property var visibleRegions: {
+        var all = win.allRegions
+        var q = win.searchText.toLowerCase()
         var out = []
         if (q.length > 0) {
-            for (var i = 0; i < allRegions.length && out.length < 700; i++) {
-                var r = allRegions[i]
+            for (var i = 0; i < all.length && out.length < 700; i++) {
+                var r = all[i]
                 if (r.name.toLowerCase().indexOf(q) >= 0 || (r.parent || "").toLowerCase().indexOf(q) >= 0)
                     out.push(r)
             }
         } else {
-            for (var j = 0; j < allRegions.length; j++)
-                if (allRegions[j].parent === win.currentParent) out.push(allRegions[j])
+            for (var j = 0; j < all.length; j++)
+                if (all[j].parent === win.currentParent) out.push(all[j])
         }
-        regionList.model = out
+        return out
     }
+
     function drillInto(node) {
         win.navStack = win.navStack.concat([{ id: node.id, name: node.name }])
         win.currentParent = node.id
         win.forwardStack = []
         searchField.text = ""
-        win.refreshList()
     }
     function navTo(depth) {   // depth -1 = world root
         win.navStack = win.navStack.slice(0, depth + 1)
         win.currentParent = depth < 0 ? "" : win.navStack[depth].id
         win.forwardStack = []
         searchField.text = ""
-        win.refreshList()
     }
     function goBack() {
         if (win.navStack.length === 0) return
@@ -93,7 +97,6 @@ ApplicationWindow {
         win.forwardStack = win.forwardStack.concat([popped])
         win.currentParent = win.navStack.length ? win.navStack[win.navStack.length - 1].id : ""
         searchField.text = ""
-        win.refreshList()
     }
     function goForward() {
         if (win.forwardStack.length === 0) return
@@ -102,7 +105,6 @@ ApplicationWindow {
         win.navStack = win.navStack.concat([node])
         win.currentParent = node.id
         searchField.text = ""
-        win.refreshList()
     }
 
     header: ToolBar {
@@ -178,7 +180,7 @@ ApplicationWindow {
                 id: searchField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Search anywhere e.g. \"nord-pas\", \"switzerland\"…")
-                onTextChanged: win.refreshList()
+                onTextChanged: win.searchText = text
             }
 
             // breadcrumb (hidden while searching)
@@ -211,10 +213,22 @@ ApplicationWindow {
             Rectangle {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 color: Theme.card; radius: Theme.radiusCard; border.color: Theme.border
+                // loading / empty state — so a blank list is never a mystery
+                Text {
+                    anchors.centerIn: parent
+                    width: parent.width - 2 * Theme.spacingLarge
+                    horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
+                    visible: regionList.count === 0
+                    color: Theme.mutedText; font.pixelSize: Theme.fontSizeLabel
+                    text: win.allRegions.length === 0 ? qsTr("Loading region list…")
+                          : win.searchText.length ? qsTr("No matches — try a different search.")
+                          : qsTr("No sub-regions here. Use ‹ back or a breadcrumb above.")
+                }
                 ListView {
                     id: regionList
                     anchors.fill: parent; anchors.margins: Theme.spacingSmall
                     clip: true; boundsBehavior: Flickable.StopAtBounds
+                    model: win.visibleRegions
                     ScrollBar.vertical: ScrollBar {}
                     delegate: Rectangle {
                         width: regionList.width
