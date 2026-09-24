@@ -2,9 +2,9 @@
 
 Fresh OpenStreetMap maps for **Bryton Aero 60** and **Rider 450** GPS cycling computers.
 
-Bryton removed the map-download function from their tools and gated the current mobile app
-behind Google Play device certification. If you have one of these units, the on-device map is
-frozen at whatever shipped in 2018 — no new roads, no new paths. BryMaps rebuilds the exact
+Bryton removed the map-download function from their tools and the old links don't work. If you have one of these units, the on-device map is
+frozen at whatever shipped in 2018 — no new roads, no new paths. 
+BryMaps rebuilds the exact
 on-device map format from current OpenStreetMap data, so you can put an up-to-date map on the
 device yourself.
 
@@ -18,6 +18,7 @@ Windows and Linux desktop app (Android planned — see [docs/ANDROID.md](docs/AN
 
 > Not affiliated with or endorsed by Bryton. OpenStreetMap data © OpenStreetMap contributors,
 > ODbL. Use at your own risk — always keep the backup BryMaps makes.
+> Vibecoded with Claude, tested on Aero 60
 
 ## How it works
 
