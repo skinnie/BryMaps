@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtGui import QGuiApplication, QIcon
-from PySide6.QtQml import QQmlApplicationEngine, qmlRegisterSingletonType
+from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtCore import QUrl
 
 from backend import Backend

@@ -75,6 +75,24 @@ def find_device() -> Path | None:
     return cands[0] if cands else None
 
 
+def read_model(dev: Path | None) -> str:
+    """Read the device model from System/device.txt or release.ini ([MODEL] Model=...)."""
+    if not dev:
+        return ""
+    for rel in ("System/device.txt", "System/release.ini"):
+        f = Path(dev) / rel
+        try:
+            for line in f.read_text(errors="ignore").splitlines():
+                s = line.strip()
+                if s.lower().startswith("model="):
+                    val = s.split("=", 1)[1].strip()
+                    if val:
+                        return val if val.lower().startswith("bryton") else f"Bryton {val}"
+        except OSError:
+            continue
+    return ""
+
+
 class Backend(QObject):
     logLine = Signal(str)
     busyChanged = Signal()
@@ -87,6 +105,7 @@ class Backend(QObject):
         super().__init__()
         self._busy = False
         self._device = None
+        self._model = ""
         self._regions = []
         threading.Thread(target=self._load_regions, daemon=True).start()
         self.refresh_device()
@@ -100,6 +119,10 @@ class Backend(QObject):
         return str(self._device) if self._device else ""
     devicePath = Property(str, _get_device, notify=deviceChanged)
 
+    def _get_model(self):
+        return self._model
+    deviceModel = Property(str, _get_model, notify=deviceChanged)
+
     def _set_busy(self, v):
         if v != self._busy:
             self._busy = v
@@ -112,9 +135,10 @@ class Backend(QObject):
     @Slot()
     def refresh_device(self):
         self._device = find_device()
+        self._model = read_model(self._device) if self._device else ""
         self.deviceChanged.emit()
         if self._device:
-            self._log(f"Device found at {self._device}")
+            self._log(f"Device found at {self._device}" + (f" — {self._model}" if self._model else ""))
         return self._get_device()
 
     @Slot(str)

@@ -121,10 +121,24 @@ ApplicationWindow {
             Rectangle { width: 10; height: 10; radius: 5
                 color: Backend.devicePath ? Theme.primary : Theme.error }
             Text {
-                text: Backend.devicePath ? qsTr("Bryton connected") : qsTr("No device")
+                text: Backend.devicePath ? (Backend.deviceModel || qsTr("Bryton")) + qsTr(" connected")
+                                         : qsTr("No device")
                 color: Theme.text; font.pixelSize: Theme.fontSizeLabel
             }
-            ToolButton { text: "⟳"; onClicked: Backend.refresh_device() }
+            ToolButton {
+                text: "⟳"
+                ToolTip.visible: hovered; ToolTip.text: qsTr("Rescan for device")
+                onClicked: Backend.refresh_device()
+            }
+            ToolButton {
+                text: Theme.override === "light" ? "☀" : Theme.override === "dark" ? "☾" : "◐"
+                font.pixelSize: Theme.fontSizeSubtitle
+                ToolTip.visible: hovered
+                ToolTip.text: qsTr("Appearance: ") + (Theme.override === "light" ? qsTr("Light")
+                              : Theme.override === "dark" ? qsTr("Dark") : qsTr("System"))
+                onClicked: Theme.override = Theme.override === "system" ? "light"
+                           : Theme.override === "light" ? "dark" : "system"
+            }
         }
     }
 
@@ -202,24 +216,21 @@ ApplicationWindow {
                     anchors.fill: parent; anchors.margins: Theme.spacingSmall
                     clip: true; boundsBehavior: Flickable.StopAtBounds
                     ScrollBar.vertical: ScrollBar {}
-                    delegate: ItemDelegate {
+                    delegate: Rectangle {
                         width: regionList.width
-                        highlighted: win.selRegion && win.selRegion.id === modelData.id
-                        // single click = select (ready to build); double click = open its zones
-                        onClicked: win.selRegion = modelData
-                        onDoubleClicked: {
-                            win.selRegion = modelData
-                            if (modelData.hasChildren && searchField.text.length === 0)
-                                win.drillInto(modelData)
-                        }
-                        background: Rectangle {
-                            color: parent.highlighted ? Theme.cardNested : "transparent"
-                            radius: Theme.radiusSmall
-                        }
-                        contentItem: RowLayout {
+                        height: 50
+                        radius: Theme.radiusSmall
+                        property bool selected: win.selRegion && win.selRegion.id === modelData.id
+                        color: selected ? Theme.cardNested : (hover.hovered ? Theme.surface : "transparent")
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: Theme.spacingSmall
+                            anchors.rightMargin: Theme.spacingSmall
                             spacing: Theme.spacingSmall
                             Column {
                                 Layout.fillWidth: true
+                                spacing: 2
                                 Text { text: modelData.name; color: Theme.text; font.pixelSize: Theme.fontSizeBody }
                                 Text {
                                     text: {
@@ -233,6 +244,16 @@ ApplicationWindow {
                             Text {
                                 visible: modelData.hasChildren && searchField.text.length === 0
                                 text: "›"; color: Theme.mutedText; font.pixelSize: Theme.fontSizeTitle
+                            }
+                        }
+                        HoverHandler { id: hover }
+                        TapHandler {
+                            acceptedButtons: Qt.LeftButton
+                            onSingleTapped: win.selRegion = modelData
+                            onDoubleTapped: {
+                                win.selRegion = modelData
+                                if (modelData.hasChildren && searchField.text.length === 0)
+                                    win.drillInto(modelData)
                             }
                         }
                     }
