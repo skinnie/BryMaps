@@ -20,6 +20,7 @@ ApplicationWindow {
     property string lastDat: ""
     // navigation: stack of {id, name}; currentParent "" = world root
     property var navStack: []
+    property var forwardStack: []
     property string currentParent: ""
 
     function regionCode(name) {
@@ -74,12 +75,32 @@ ApplicationWindow {
     function drillInto(node) {
         win.navStack = win.navStack.concat([{ id: node.id, name: node.name }])
         win.currentParent = node.id
+        win.forwardStack = []
         searchField.text = ""
         win.refreshList()
     }
     function navTo(depth) {   // depth -1 = world root
         win.navStack = win.navStack.slice(0, depth + 1)
         win.currentParent = depth < 0 ? "" : win.navStack[depth].id
+        win.forwardStack = []
+        searchField.text = ""
+        win.refreshList()
+    }
+    function goBack() {
+        if (win.navStack.length === 0) return
+        var popped = win.navStack[win.navStack.length - 1]
+        win.navStack = win.navStack.slice(0, -1)
+        win.forwardStack = win.forwardStack.concat([popped])
+        win.currentParent = win.navStack.length ? win.navStack[win.navStack.length - 1].id : ""
+        searchField.text = ""
+        win.refreshList()
+    }
+    function goForward() {
+        if (win.forwardStack.length === 0) return
+        var node = win.forwardStack[win.forwardStack.length - 1]
+        win.forwardStack = win.forwardStack.slice(0, -1)
+        win.navStack = win.navStack.concat([node])
+        win.currentParent = node.id
         searchField.text = ""
         win.refreshList()
     }
@@ -104,6 +125,18 @@ ApplicationWindow {
                 color: Theme.text; font.pixelSize: Theme.fontSizeLabel
             }
             ToolButton { text: "⟳"; onClicked: Backend.refresh_device() }
+        }
+    }
+
+    // Mouse back/forward buttons navigate the region tree. Only these two buttons are
+    // accepted, so left-clicks, drags and the wheel pass straight through to the list below.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.BackButton | Qt.ForwardButton
+        z: 10
+        onPressed: (mouse) => {
+            if (mouse.button === Qt.BackButton) win.goBack()
+            else if (mouse.button === Qt.ForwardButton) win.goForward()
         }
     }
 
@@ -172,7 +205,13 @@ ApplicationWindow {
                     delegate: ItemDelegate {
                         width: regionList.width
                         highlighted: win.selRegion && win.selRegion.id === modelData.id
+                        // single click = select (ready to build); double click = open its zones
                         onClicked: win.selRegion = modelData
+                        onDoubleClicked: {
+                            win.selRegion = modelData
+                            if (modelData.hasChildren && searchField.text.length === 0)
+                                win.drillInto(modelData)
+                        }
                         background: Rectangle {
                             color: parent.highlighted ? Theme.cardNested : "transparent"
                             radius: Theme.radiusSmall
@@ -183,17 +222,17 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 Text { text: modelData.name; color: Theme.text; font.pixelSize: Theme.fontSizeBody }
                                 Text {
-                                    text: (searchField.text.length ? (modelData.parent || "") + " · " : "") +
-                                          win.humanSize(modelData.bytes) + qsTr(" download")
+                                    text: {
+                                        var sz = win.humanSize(modelData.bytes) + qsTr(" download")
+                                        if (searchField.text.length) return (modelData.parent || "") + " · " + sz
+                                        return (modelData.hasChildren ? qsTr("double-click for zones · ") : "") + sz
+                                    }
                                     color: Theme.mutedText; font.pixelSize: Theme.fontSizeCaption
                                 }
                             }
-                            // drill-in chevron for nodes that have sub-regions
-                            ToolButton {
+                            Text {
                                 visible: modelData.hasChildren && searchField.text.length === 0
-                                text: "›"
-                                font.pixelSize: Theme.fontSizeTitle
-                                onClicked: win.drillInto(modelData)
+                                text: "›"; color: Theme.mutedText; font.pixelSize: Theme.fontSizeTitle
                             }
                         }
                     }
