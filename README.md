@@ -14,7 +14,7 @@ device yourself.
 - **Back up** the maps already on your device before changing anything.
 - **Install** the new map straight to the connected device.
 
-Windows and Linux desktop app (Android planned — see [docs/ANDROID.md](docs/ANDROID.md)).
+Windows and Linux desktop app.
 
 > Not affiliated with or endorsed by Bryton. OpenStreetMap data © OpenStreetMap contributors,
 > ODbL. Use at your own risk — always keep the backup BryMaps makes.
