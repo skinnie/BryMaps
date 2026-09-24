@@ -18,14 +18,22 @@ ApplicationWindow {
     property var selRegion: null
     property string outDir: ""
     property string lastDat: ""
+    // navigation: stack of {id, name}; currentParent "" = world root
+    property var navStack: []
+    property string currentParent: ""
 
     function regionCode(name) {
         var s = (name || "XX").replace(/[^A-Za-z]/g, "").toUpperCase()
         return "C" + (s.length >= 2 ? s.substring(0, 2) : "XX")
     }
+    function humanSize(b) {
+        if (!b) return ""
+        if (b >= 1e9) return (b / 1e9).toFixed(1) + " GB"
+        if (b >= 1e6) return Math.round(b / 1e6) + " MB"
+        return Math.round(b / 1e3) + " kB"
+    }
     function urlToPath(u) {
         var s = ("" + u).replace(/^file:\/\//, "")
-        // Windows: "file:///C:/x" -> "/C:/x" -> "C:/x"
         if (/^\/[A-Za-z]:/.test(s)) s = s.substring(1)
         return decodeURIComponent(s)
     }
@@ -37,7 +45,7 @@ ApplicationWindow {
 
     Connections {
         target: Backend
-        function onRegionsLoaded(list) { win.allRegions = list; filterRegions(searchField.text) }
+        function onRegionsLoaded(list) { win.allRegions = list; win.refreshList() }
         function onLogLine(s) { logArea.text += s + "\n"; logArea.cursorPosition = logArea.length }
         function onProgress(v) { progress.indeterminate = (v < 0); if (v >= 0) progress.value = v }
         function onBuildFinished(ok, msg) {
@@ -47,15 +55,33 @@ ApplicationWindow {
         }
     }
 
-    function filterRegions(q) {
-        q = (q || "").toLowerCase()
+    // build the visible model: search overrides the tree
+    function refreshList() {
+        var q = searchField.text.toLowerCase()
         var out = []
-        for (var i = 0; i < allRegions.length && out.length < 700; i++) {
-            var r = allRegions[i]
-            if (!q || r.name.toLowerCase().indexOf(q) >= 0 || (r.parent || "").toLowerCase().indexOf(q) >= 0)
-                out.push(r)
+        if (q.length > 0) {
+            for (var i = 0; i < allRegions.length && out.length < 700; i++) {
+                var r = allRegions[i]
+                if (r.name.toLowerCase().indexOf(q) >= 0 || (r.parent || "").toLowerCase().indexOf(q) >= 0)
+                    out.push(r)
+            }
+        } else {
+            for (var j = 0; j < allRegions.length; j++)
+                if (allRegions[j].parent === win.currentParent) out.push(allRegions[j])
         }
         regionList.model = out
+    }
+    function drillInto(node) {
+        win.navStack = win.navStack.concat([{ id: node.id, name: node.name }])
+        win.currentParent = node.id
+        searchField.text = ""
+        win.refreshList()
+    }
+    function navTo(depth) {   // depth -1 = world root
+        win.navStack = win.navStack.slice(0, depth + 1)
+        win.currentParent = depth < 0 ? "" : win.navStack[depth].id
+        searchField.text = ""
+        win.refreshList()
     }
 
     header: ToolBar {
@@ -97,16 +123,44 @@ ApplicationWindow {
                 color: Theme.text; font.pixelSize: Theme.fontSizeLargeTitle; font.bold: true
             }
             Text {
-                text: qsTr("These are free OpenStreetMap extracts from Geofabrik, updated daily. Pick the smallest area that covers where you ride — smaller builds faster and loads faster on the device.")
+                text: qsTr("Drill in: continent → country → region. Pick the smallest area that covers your rides — the device holds one file per area, so you never need a whole continent.")
                 color: Theme.mutedText; font.pixelSize: Theme.fontSizeLabel
                 Layout.fillWidth: true; wrapMode: Text.WordWrap
             }
             TextField {
                 id: searchField
                 Layout.fillWidth: true
-                placeholderText: qsTr("Search e.g. \"nord-pas\", \"belgium\", \"portugal\"…")
-                onTextChanged: filterRegions(text)
+                placeholderText: qsTr("Search anywhere e.g. \"nord-pas\", \"switzerland\"…")
+                onTextChanged: win.refreshList()
             }
+
+            // breadcrumb (hidden while searching)
+            Flow {
+                Layout.fillWidth: true
+                spacing: 4
+                visible: searchField.text.length === 0
+                Text {
+                    text: "🌍 World"; color: Theme.primary; font.pixelSize: Theme.fontSizeLabel
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                        onClicked: win.navTo(-1) }
+                }
+                Repeater {
+                    model: win.navStack
+                    Row {
+                        spacing: 4
+                        Text { text: "›"; color: Theme.mutedText; font.pixelSize: Theme.fontSizeLabel }
+                        Text {
+                            text: modelData.name
+                            color: index === win.navStack.length - 1 ? Theme.text : Theme.primary
+                            font.pixelSize: Theme.fontSizeLabel
+                            font.bold: index === win.navStack.length - 1
+                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                onClicked: win.navTo(index) }
+                        }
+                    }
+                }
+            }
+
             Rectangle {
                 Layout.fillWidth: true; Layout.fillHeight: true
                 color: Theme.card; radius: Theme.radiusCard; border.color: Theme.border
@@ -120,20 +174,26 @@ ApplicationWindow {
                         highlighted: win.selRegion && win.selRegion.id === modelData.id
                         onClicked: win.selRegion = modelData
                         background: Rectangle {
-                            color: highlighted ? Theme.cardNested : "transparent"
+                            color: parent.highlighted ? Theme.cardNested : "transparent"
                             radius: Theme.radiusSmall
                         }
                         contentItem: RowLayout {
+                            spacing: Theme.spacingSmall
                             Column {
                                 Layout.fillWidth: true
                                 Text { text: modelData.name; color: Theme.text; font.pixelSize: Theme.fontSizeBody }
-                                Text { text: modelData.parent || ""; color: Theme.mutedText
-                                       font.pixelSize: Theme.fontSizeCaption; visible: !!modelData.parent }
+                                Text {
+                                    text: (searchField.text.length ? (modelData.parent || "") + " · " : "") +
+                                          win.humanSize(modelData.bytes) + qsTr(" download")
+                                    color: Theme.mutedText; font.pixelSize: Theme.fontSizeCaption
+                                }
                             }
-                            Text {
-                                text: modelData.bbox ? Math.round(Math.abs(modelData.bbox[2]-modelData.bbox[0]) *
-                                      Math.abs(modelData.bbox[3]-modelData.bbox[1])) + "°²" : ""
-                                color: Theme.mutedText; font.pixelSize: Theme.fontSizeCaption
+                            // drill-in chevron for nodes that have sub-regions
+                            ToolButton {
+                                visible: modelData.hasChildren && searchField.text.length === 0
+                                text: "›"
+                                font.pixelSize: Theme.fontSizeTitle
+                                onClicked: win.drillInto(modelData)
                             }
                         }
                     }
@@ -147,7 +207,6 @@ ApplicationWindow {
             Layout.fillHeight: true
             spacing: Theme.spacingMedium
 
-            // selection card
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: selCol.implicitHeight + Theme.spacingLarge
@@ -165,9 +224,16 @@ ApplicationWindow {
                         font.pixelSize: Theme.fontSizeSubtitle; font.bold: win.selRegion !== null
                     }
                     Text {
-                        Layout.fillWidth: true; visible: win.selRegion !== null
-                        text: win.selRegion ? win.selRegion.parent : ""
+                        Layout.fillWidth: true; visible: win.selRegion !== null; wrapMode: Text.WordWrap
+                        text: win.selRegion ? (win.selRegion.parent || "world") + " · " +
+                              win.humanSize(win.selRegion.bytes) + qsTr(" OSM download") : ""
                         color: Theme.mutedText; font.pixelSize: Theme.fontSizeCaption
+                    }
+                    Text {
+                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                        visible: win.selRegion !== null && win.selRegion.bytes > 3e9
+                        text: qsTr("⚠ Large area — this is a multi-GB download and a long build. Prefer a country or region.")
+                        color: Theme.warning; font.pixelSize: Theme.fontSizeCaption
                     }
                     Button {
                         Layout.fillWidth: true; Layout.topMargin: Theme.spacingSmall
@@ -181,7 +247,6 @@ ApplicationWindow {
                 }
             }
 
-            // device / backup card
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: devCol.implicitHeight + Theme.spacingLarge
@@ -213,7 +278,6 @@ ApplicationWindow {
                 }
             }
 
-            // output folder
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: outCol.implicitHeight + Theme.spacingLarge
@@ -240,7 +304,7 @@ ApplicationWindow {
             Text {
                 id: status; Layout.fillWidth: true; wrapMode: Text.WordWrap
                 color: Theme.mutedText; font.pixelSize: Theme.fontSizeCaption
-                text: qsTr("Pick a region and press Build.")
+                text: qsTr("Drill to a region and press Build.")
             }
         }
     }

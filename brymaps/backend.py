@@ -147,20 +147,37 @@ class Backend(QObject):
             self._set_busy(False)
 
     # ---- regions ----
+    def _sizes(self):
+        if getattr(self, "_size_map", None) is None:
+            self._size_map = {}
+            f = Path(__file__).resolve().parent.parent / "data" / "geofabrik-sizes.json"
+            try:
+                self._size_map = json.loads(f.read_text())
+            except Exception:
+                pass
+        return self._size_map
+
     def _parse_index(self, text):
         data = json.loads(text)
+        sizes = self._sizes()
         regions = []
+        parents = set()
         for feat in data["features"]:
             p = feat["properties"]
             pbf = (p.get("urls") or {}).get("pbf")
             if not pbf:
                 continue
+            par = p.get("parent") or ""
+            parents.add(par)
             b = feat.get("geometry")
             regions.append({
                 "id": p["id"], "name": p.get("name", p["id"]),
-                "parent": p.get("parent") or "", "pbf": pbf,
+                "parent": par, "pbf": pbf,
                 "bbox": _bbox_of(b) if b else None,
+                "bytes": int(sizes.get(p["id"], 0)),
             })
+        for r in regions:
+            r["hasChildren"] = r["id"] in parents
         regions.sort(key=lambda r: (r["parent"] or "", r["name"] or ""))
         return regions
 
